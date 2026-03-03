@@ -5,7 +5,7 @@ import path from 'path';
 import * as subs from './subscriptions';
 import * as pushService from './pushService';
 import { startPolling, alertEvents, getCurrentAlert, setOverrideAlert, clearOverrideAlert } from './alertPoller';
-import { initAreaFinder, findNearestArea } from './areaFinder';
+import { findNearestArea } from './areaFinder';
 
 dotenv.config();
 
@@ -97,14 +97,14 @@ app.delete('/api/subscribe', (req: Request, res: Response) => {
 });
 
 /** Resolve GPS coordinates → nearest Pikud HaOref area name */
-app.get('/api/find-area', (req: Request, res: Response) => {
+app.get('/api/find-area', async (req: Request, res: Response) => {
   const lat = parseFloat(req.query.lat as string);
   const lng = parseFloat(req.query.lng as string);
   if (isNaN(lat) || isNaN(lng)) {
     res.status(400).json({ error: 'Invalid coordinates' });
     return;
   }
-  const area = findNearestArea(lat, lng);
+  const area = await findNearestArea(lat, lng);
   res.json({ area });
 });
 
@@ -174,5 +174,4 @@ app.listen(PORT, () => {
   console.log(`\n🚀 Backend running on http://localhost:${PORT}`);
   pushService.init();
   startPolling();
-  initAreaFinder();
 });
