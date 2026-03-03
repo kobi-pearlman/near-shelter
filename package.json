@@ -2,8 +2,8 @@
   "name": "near-shelter",
   "version": "1.0.0",
   "scripts": {
-    "build": "npm install --include=dev --prefix frontend && npm run build --prefix frontend && npm install --prefix backend",
-    "start": "npm start --prefix backend"
+    "build": "npm --prefix frontend install --include=dev && npm --prefix frontend run build && npm --prefix backend install",
+    "start": "npm --prefix backend start"
   },
   "engines": {
     "node": ">=20"
