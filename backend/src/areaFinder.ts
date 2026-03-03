@@ -2,7 +2,8 @@ import fs from 'fs';
 import path from 'path';
 
 const CACHE_FILE = path.join(__dirname, '..', 'areas_cache.json');
-const CITIES_URL = 'https://www.oref.org.il/Shared/Ajax/GetCities.aspx?lang=he';
+const CITIES_PATH = '/Shared/Ajax/GetCities.aspx?lang=he';
+const CITIES_OREF_URL = 'https://www.oref.org.il' + CITIES_PATH;
 
 interface OrefCity {
   value: string;
@@ -69,7 +70,9 @@ async function buildCache(): Promise<void> {
 
   let cities: OrefCity[];
   try {
-    const res = await fetch(CITIES_URL, {
+    const proxyBase = process.env.PROXY_URL;
+    const citiesUrl = proxyBase ? proxyBase.replace(/\/$/, '') + CITIES_PATH : CITIES_OREF_URL;
+    const res = await fetch(citiesUrl, {
       headers: {
         Referer: 'https://www.oref.org.il/',
         'X-Requested-With': 'XMLHttpRequest',

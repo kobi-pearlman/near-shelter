@@ -10,7 +10,8 @@
  *   4. Set PROXY_URL=https://oref-proxy.YOUR_NAME.workers.dev in Render env vars
  */
 
-const OREF_URL = 'https://www.oref.org.il/WarningMessages/alert/alerts.json';
+const OREF_BASE = 'https://www.oref.org.il';
+const DEFAULT_PATH = '/WarningMessages/alert/alerts.json';
 
 export default {
   async fetch(request) {
@@ -19,7 +20,11 @@ export default {
       return new Response('Method not allowed', { status: 405 });
     }
 
-    const response = await fetch(OREF_URL, {
+    const url = new URL(request.url);
+    const targetPath = url.pathname === '/' ? DEFAULT_PATH : url.pathname + url.search;
+    const targetUrl = OREF_BASE + targetPath;
+
+    const response = await fetch(targetUrl, {
       headers: {
         'Referer': 'https://www.oref.org.il/',
         'X-Requested-With': 'XMLHttpRequest',
