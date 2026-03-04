@@ -27,9 +27,11 @@ export function StatusBar({
       <span className="status-item">
         <span className={`status-dot ${location.lat ? 'green' : 'orange'}`} />
         <span>
-          {location.lat
-            ? (location.cityName ?? '📍 מאתר עיר...')
-            : (location.error ?? 'ממתין למיקום...')}
+          {location.isRefreshing
+            ? '📍 מאתר מיקום...'
+            : location.lat
+              ? (location.cityName ?? '📍 מאתר עיר...')
+              : (location.error ?? 'ממתין למיקום...')}
         </span>
       </span>
 

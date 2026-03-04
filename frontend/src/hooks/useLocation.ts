@@ -5,6 +5,7 @@ export interface UserLocation {
   lng: number | null;
   cityName: string | null;
   error: string | null;
+  isRefreshing: boolean;
 }
 
 async function fetchAreaName(lat: number, lng: number): Promise<string | null> {
@@ -48,6 +49,7 @@ export function useLocation(): UserLocation {
     lng: null,
     cityName: null,
     error: null,
+    isRefreshing: true,
   });
 
   const watchIdRef = useRef<number | null>(null);
@@ -55,7 +57,7 @@ export function useLocation(): UserLocation {
 
   useEffect(() => {
     if (!navigator.geolocation) {
-      setLocation({ lat: null, lng: null, cityName: null, error: 'GPS לא נתמך בדפדפן זה' });
+      setLocation({ lat: null, lng: null, cityName: null, error: 'GPS לא נתמך בדפדפן זה', isRefreshing: false });
       return;
     }
 
@@ -63,7 +65,7 @@ export function useLocation(): UserLocation {
       // Set early to prevent duplicate concurrent calls on rapid GPS ticks
       lastResolvedRef.current = { lat, lng };
       const cityName = await fetchAreaName(lat, lng);
-      setLocation(prev => ({ ...prev, cityName }));
+      setLocation(prev => ({ ...prev, cityName, isRefreshing: false }));
     }
 
     function onPosition(pos: GeolocationPosition): void {
@@ -79,15 +81,21 @@ export function useLocation(): UserLocation {
 
     watchIdRef.current = navigator.geolocation.watchPosition(
       onPosition,
-      () => setLocation({ lat: null, lng: null, cityName: null, error: 'לא ניתן לקבל מיקום' }),
+      () => setLocation({ lat: null, lng: null, cityName: null, error: 'לא ניתן לקבל מיקום', isRefreshing: false }),
       { enableHighAccuracy: false, timeout: 10_000 }
     );
 
-    // Re-resolve area when the app comes back to the foreground
+    // Re-fetch GPS + re-resolve area when the app comes back to the foreground
     function onVisibilityChange(): void {
-      if (!document.hidden && lastResolvedRef.current) {
-        void resolveArea(lastResolvedRef.current.lat, lastResolvedRef.current.lng);
-      }
+      if (document.hidden) return;
+      // Show refreshing indicator and clear cached position so area re-resolves
+      lastResolvedRef.current = null;
+      setLocation(prev => ({ ...prev, isRefreshing: true }));
+      navigator.geolocation.getCurrentPosition(
+        onPosition,
+        () => setLocation(prev => ({ ...prev, isRefreshing: false })),
+        { enableHighAccuracy: false, timeout: 10_000 }
+      );
     }
     document.addEventListener('visibilitychange', onVisibilityChange);
 
