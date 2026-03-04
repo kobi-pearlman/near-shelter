@@ -139,10 +139,8 @@ app.post('/api/internal-alert', (req: Request, res: Response) => {
   }
   const { active, alert } = req.body as { active: boolean; alert?: OrefAlert };
   if (active && alert) {
-    console.log(`🚨 [${new Date().toISOString()}] ALERT from Pikud HaOref:`, JSON.stringify(alert, null, 2));
     setCurrentAlert(alert);
   } else {
-    console.log(`✅ [${new Date().toISOString()}] CLEAR from Pikud HaOref`);
     clearCurrentAlert();
   }
   res.json({ ok: true });
@@ -177,8 +175,8 @@ app.post('/api/test-alert', async (_req: Request, res: Response) => {
 
 // ── Alert event handlers ──────────────────────────────────────────────────
 
-alertEvents.on('alert', (alert: { id: string; title: string; data: string[]; desc: string }) => {
-  console.log(`🚨 [${new Date().toISOString()}] ALERT:`, JSON.stringify(alert, null, 2));
+alertEvents.on('alert', (alert: { id: string; cat: string; title: string; data: string[]; desc: string }) => {
+  console.log(`🚨 [${new Date().toISOString()}] ALERT: id=${alert.id} cat=${alert.cat} title="${alert.title}" cities=${(alert.data ?? []).length} desc="${alert.desc}"`);
   void pushService.sendAlertToAll({
     title: alert.title ?? 'אזעקה',
     cities: alert.data ?? [],

@@ -70,7 +70,7 @@ async function poll(): Promise<void> {
         lastAlertId = alert.id;
         currentAlert = alert;
         alertEvents.emit('alert', alert);
-        console.log(`🚨 Alert: ${alert.title} | ${(alert.data ?? []).join(', ')}`);
+        console.log(`🚨 Alert: id=${alert.id} cat=${alert.cat} title="${alert.title}" cities=${(alert.data ?? []).length} desc="${alert.desc}"`);
       }
     } else {
       if (currentAlert !== null) {
@@ -93,10 +93,7 @@ export function setCurrentAlert(alert: OrefAlert): void {
     lastAlertId = alert.id;
     currentAlert = alert;
     alertEvents.emit('alert', alert);
-    console.log(`🚨 External alert: ${alert.title} | ${(alert.data ?? []).join(', ')}`);
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('📦 Full alert payload:', JSON.stringify(alert, null, 2));
-    }
+    console.log(`🚨 External alert: id=${alert.id} cat=${alert.cat} title="${alert.title}" cities=${(alert.data ?? []).length} desc="${alert.desc}"`);
   }
 }
 
