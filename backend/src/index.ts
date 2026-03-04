@@ -67,7 +67,12 @@ app.get('/api/alert-stream', (req: Request, res: Response) => {
   alertEvents.on('alert', onAlert);
   alertEvents.on('clear', onClear);
 
+  // Keep-alive: Render's load balancer kills idle connections after ~55s.
+  // Send a SSE comment every 30s so the connection stays alive.
+  const keepAlive = setInterval(() => res.write(': ka\n\n'), 30_000);
+
   req.on('close', () => {
+    clearInterval(keepAlive);
     alertEvents.off('alert', onAlert);
     alertEvents.off('clear', onClear);
   });

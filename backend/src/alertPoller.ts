@@ -44,13 +44,19 @@ async function fetchAlert(): Promise<OrefAlert | null> {
     },
   });
 
-  if (!res.ok) return null;
+  if (!res.ok) {
+    console.warn(`⚠️  oref fetch HTTP ${res.status} from ${url}`);
+    return null;
+  }
 
   const text = (await res.text()).trim();
   if (!text || text === '{}' || text === '[]' || text === '') return null;
 
   const parsed = JSON.parse(text) as Partial<OrefAlert>;
-  if (!parsed.id) return null;
+  if (!parsed.id) {
+    console.warn('⚠️  oref returned non-empty body but no id:', text.slice(0, 200));
+    return null;
+  }
 
   return parsed as OrefAlert;
 }
@@ -82,6 +88,11 @@ async function poll(): Promise<void> {
 }
 
 export function startPolling(): void {
-  console.log('🔄 Starting Pikud HaOref alert polling every 5s...');
+  const proxyUrl = process.env.PROXY_URL;
+  if (proxyUrl) {
+    console.log(`🔄 Starting Pikud HaOref alert polling every 5s via proxy: ${proxyUrl}`);
+  } else {
+    console.warn('⚠️  PROXY_URL not set — polling oref.org.il directly (will be geo-blocked on non-Israeli IPs)');
+  }
   void poll();
 }
