@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import * as subs from './subscriptions';
 import * as pushService from './pushService';
-import { startPolling, alertEvents, getCurrentAlert, setOverrideAlert, clearOverrideAlert } from './alertPoller';
+import { startPolling, alertEvents, getCurrentAlert, setOverrideAlert, clearOverrideAlert, setCurrentAlert, clearCurrentAlert, OrefAlert } from './alertPoller';
 import { findNearestArea } from './areaFinder';
 
 dotenv.config();
@@ -125,6 +125,26 @@ const MOCK_CITIES = [
   'רמת גן',
   'גבעתיים',
 ];
+
+/** Webhook — receives alert state from the Oracle Cloud poller (Israeli IP).
+ *  Secured with INTERNAL_SECRET env var (Authorization: Bearer <secret>). */
+app.post('/api/internal-alert', (req: Request, res: Response) => {
+  const secret = process.env.INTERNAL_SECRET;
+  if (secret) {
+    const auth = req.headers.authorization;
+    if (auth !== `Bearer ${secret}`) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+  }
+  const { active, alert } = req.body as { active: boolean; alert?: OrefAlert };
+  if (active && alert) {
+    setCurrentAlert(alert);
+  } else {
+    clearCurrentAlert();
+  }
+  res.json({ ok: true });
+});
 
 /** Dev toggle — activates or clears a mock alert via SSE + push */
 app.post('/api/dev/mock-alert', (req: Request, res: Response) => {

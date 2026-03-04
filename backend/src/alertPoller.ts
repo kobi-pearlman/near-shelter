@@ -87,7 +87,34 @@ async function poll(): Promise<void> {
   setTimeout(() => void poll(), POLL_INTERVAL);
 }
 
+/** Called by the external Oracle poller webhook to inject a new alert */
+export function setCurrentAlert(alert: OrefAlert): void {
+  if (alert.id !== lastAlertId) {
+    lastAlertId = alert.id;
+    currentAlert = alert;
+    alertEvents.emit('alert', alert);
+    console.log(`🚨 External alert: ${alert.title} | ${(alert.data ?? []).join(', ')}`);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('📦 Full alert payload:', JSON.stringify(alert, null, 2));
+    }
+  }
+}
+
+/** Called by the external Oracle poller webhook to clear the active alert */
+export function clearCurrentAlert(): void {
+  if (currentAlert !== null) {
+    currentAlert = null;
+    lastAlertId = null;
+    alertEvents.emit('clear');
+    console.log('✅ External alert cleared');
+  }
+}
+
 export function startPolling(): void {
+  if (process.env.DISABLE_POLLING === 'true') {
+    console.log('⏸️  Polling disabled (DISABLE_POLLING=true) — receiving alerts via Oracle poller webhook');
+    return;
+  }
   const proxyUrl = process.env.PROXY_URL;
   if (proxyUrl) {
     console.log(`🔄 Starting Pikud HaOref alert polling every 5s via proxy: ${proxyUrl}`);

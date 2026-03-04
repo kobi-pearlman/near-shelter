@@ -35,7 +35,7 @@ export function useAlert(userArea: string | null) {
       es = new EventSource('/api/alert-stream');
 
       es.onmessage = (event: MessageEvent) => {
-        retryDelay.current = BASE_RETRY_MS; // reset backoff on success
+        retryDelay.current = BASE_RETRY_MS;
         const data = JSON.parse(event.data as string) as AlertData;
         if (data.active && !areaInAlert(userArea, data.cities)) {
           setAlert({ active: false });

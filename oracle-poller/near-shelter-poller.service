@@ -1,0 +1,20 @@
+[Unit]
+Description=Near Shelter Oref Poller
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=opc
+WorkingDirectory=/home/opc/near-shelter-poller
+# Set your actual values here:
+Environment="RENDER_URL=https://near-shelter.onrender.com"
+Environment="INTERNAL_SECRET=YOUR-SECRET-HERE"
+ExecStart=/usr/local/bin/node poller.js
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

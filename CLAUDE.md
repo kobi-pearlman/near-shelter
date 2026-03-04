@@ -6,9 +6,12 @@ PWA that monitors Israeli Home Front Command (Pikud HaOref) for live missile ale
 
 ```
 near_shelter/
-├── backend/             Node.js + Express + TypeScript — alert polling, push notifications
+├── backend/             Node.js + Express + TypeScript — webhook receiver, SSE, push notifications
 ├── frontend/            React + TypeScript + Vite — PWA UI in Hebrew (RTL)
-├── cloudflare-worker/   Cloudflare Worker — Israeli IP proxy for oref.org.il
+├── cloudflare-worker/   Cloudflare Worker — legacy proxy (no longer used in production)
+├── oracle-poller/       Standalone Node.js poller — runs on Oracle Cloud VM in Israel
+│   ├── poller.js                  Polls oref.org.il every 5s, POSTs to Render webhook
+│   └── near-shelter-poller.service  systemd service template for the Oracle VM
 ├── package.json         Root build/start scripts (for Render deployment)
 ├── .gitignore
 └── CLAUDE.md
@@ -29,18 +32,43 @@ The frontend proxies all `/api/*` requests to `http://localhost:3001`.
 
 ## Key Constraints
 
-- **Geo-blocking**: The Pikud HaOref alert API (`oref.org.il`) only responds to Israeli IP addresses. Set `PROXY_URL` in `backend/.env` to the Cloudflare Worker URL to bypass this. The Worker routes outbound requests through Cloudflare's Tel Aviv PoP.
+- **Geo-blocking**: The Pikud HaOref alert API (`oref.org.il`) only responds to Israeli IP addresses. In production this is solved by the Oracle Cloud VM (see Architecture below). In local dev, set `PROXY_URL` in `backend/.env` to the Cloudflare Worker URL.
 - **Area filtering**: Alerts and push notifications are filtered by the user's Pikud HaOref area name (string-based prefix matching). Users only see/receive alerts relevant to their location.
 - **VAPID keys**: Already generated and stored in `backend/.env`. Do not regenerate unless deploying to a new environment.
 - **HTTPS required**: Geolocation API and service workers require HTTPS. In dev, `basicSsl` provides a self-signed cert. In production, Render provides HTTPS automatically.
 
+## Production Architecture
+
+```
+Oracle Cloud VM (il-jerusalem-1, Israeli IP)
+  └── oracle-poller/poller.js — polls oref.org.il every 5s
+        │  on alert/clear: POST /api/internal-alert (Bearer token)
+        ▼
+Render (US) — near-shelter.onrender.com
+  └── backend/src/index.ts
+        ├── /api/alert-stream  → SSE to open browser tabs
+        └── pushService        → Web Push to subscribers
+```
+
+The Render backend no longer polls oref.org.il directly (`DISABLE_POLLING=true`).
+The Oracle VM runs 24/7 and is the sole source of alert events.
+
+### Oracle Cloud VM Details
+- **Provider**: Oracle Cloud Free Tier (always free)
+- **Region**: il-jerusalem-1 (Israel)
+- **Shape**: VM.Standard.E2.1.Micro (1 OCPU, 1 GB RAM)
+- **OS**: Oracle Linux 9
+- **Public IP**: 151.145.87.225
+- **Poller location**: `/home/opc/near-shelter-poller/poller.js`
+- **Service**: systemd `near-shelter-poller`
+- **SSH**: `ssh -i ~/Downloads/ssh-key-2026-03-04.key opc@151.145.87.225`
+
 ## Alert Delivery
 
-Two parallel paths:
-1. **SSE** (`/api/alert-stream`) — pushes state changes to open browser tabs in real time
-2. **Web Push** — backend sends push to registered subscribers (works when app is closed)
-
-The backend polls oref.org.il every 5s. On a new alert, both paths fire simultaneously.
+Three steps:
+1. Oracle VM polls oref.org.il every 5s (Israeli IP → no geo-block)
+2. On alert/clear, POSTs to `POST /api/internal-alert` on Render with `Authorization: Bearer <INTERNAL_SECRET>`
+3. Render fires SSE to open tabs + Web Push to all subscribers
 
 ## Dev Mode Mock Alerts
 
@@ -62,25 +90,44 @@ curl -X POST http://localhost:3001/api/test-alert
 # Via dev toolbar in the UI (preferred — lets you pick city)
 ```
 
-## Deployment (Render + Cloudflare Worker)
+## Deployment
 
-### 1. Deploy Cloudflare Worker (Israeli IP proxy)
-- Go to workers.cloudflare.com → Create Worker
-- Paste `cloudflare-worker/index.js` → Save & Deploy
-- Copy the Worker URL: `https://oref-proxy.YOUR_NAME.workers.dev`
-
-### 2. Deploy on Render (free)
-- Push repo to GitHub, connect on render.com → New Web Service
-- **Build Command**: `npm run build`
-- **Start Command**: `npm start`
-- **Environment Variables**:
+### Render environment variables
 
 | Key | Value |
 |-----|-------|
 | `NODE_ENV` | `production` |
-| `PROXY_URL` | `https://oref-proxy.YOUR_NAME.workers.dev` |
+| `DISABLE_POLLING` | `true` |
+| `INTERNAL_SECRET` | shared secret (must match Oracle VM) |
 | `VAPID_PUBLIC_KEY` | from `backend/.env` |
 | `VAPID_PRIVATE_KEY` | from `backend/.env` |
 | `VAPID_EMAIL` | from `backend/.env` |
+
+### Oracle VM setup (one-time)
+
+```bash
+# SSH in
+ssh -i ~/Downloads/ssh-key-2026-03-04.key opc@151.145.87.225
+
+# Install Node.js
+sudo dnf install -y nodejs
+
+# Copy poller (from local machine)
+scp -i ~/Downloads/ssh-key-2026-03-04.key oracle-poller/poller.js opc@151.145.87.225:~/near-shelter-poller/
+
+# Install as systemd service (edit service file with RENDER_URL + INTERNAL_SECRET first)
+sudo cp ~/near-shelter-poller/near-shelter-poller.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now near-shelter-poller
+sudo journalctl -u near-shelter-poller -f
+```
+
+### Oracle VM management
+
+```bash
+sudo systemctl status near-shelter-poller    # check status
+sudo systemctl restart near-shelter-poller   # restart
+sudo journalctl -u near-shelter-poller -f    # live logs
+```
 
 In production the backend serves the built frontend from `frontend/dist/` — one deployment for both.
