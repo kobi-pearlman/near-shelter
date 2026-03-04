@@ -14,6 +14,7 @@ export function AlertBanner({ alert, location }: Props) {
         <div className="calm-icon">🛡️</div>
         <h2>אין אזעקות פעילות</h2>
         <p>המערכת עוקבת אחר התראות פיקוד העורף</p>
+        <ShelterButtons location={location} />
       </div>
     );
   }
