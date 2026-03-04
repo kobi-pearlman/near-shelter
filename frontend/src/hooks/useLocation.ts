@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export interface UserLocation {
   lat: number | null;
@@ -29,6 +29,19 @@ async function fetchAreaName(lat: number, lng: number): Promise<string | null> {
   }
 }
 
+function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6_371_000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+const DISTANCE_THRESHOLD_M = 500;
+
 export function useLocation(): UserLocation {
   const [location, setLocation] = useState<UserLocation>({
     lat: null,
@@ -37,25 +50,51 @@ export function useLocation(): UserLocation {
     error: null,
   });
 
+  const watchIdRef = useRef<number | null>(null);
+  const lastResolvedRef = useRef<{ lat: number; lng: number } | null>(null);
+
   useEffect(() => {
     if (!navigator.geolocation) {
       setLocation({ lat: null, lng: null, cityName: null, error: 'GPS לא נתמך בדפדפן זה' });
       return;
     }
 
-    navigator.geolocation.getCurrentPosition(
-      pos => {
-        const { latitude: lat, longitude: lng } = pos.coords;
-        setLocation({ lat, lng, cityName: null, error: null });
-        void fetchAreaName(lat, lng).then(cityName =>
-          setLocation(prev => ({ ...prev, cityName }))
-        );
-      },
-      () => {
-        setLocation({ lat: null, lng: null, cityName: null, error: 'לא ניתן לקבל מיקום' });
-      },
-      { enableHighAccuracy: true, timeout: 10000 }
+    async function resolveArea(lat: number, lng: number): Promise<void> {
+      // Set early to prevent duplicate concurrent calls on rapid GPS ticks
+      lastResolvedRef.current = { lat, lng };
+      const cityName = await fetchAreaName(lat, lng);
+      setLocation(prev => ({ ...prev, cityName }));
+    }
+
+    function onPosition(pos: GeolocationPosition): void {
+      const { latitude: lat, longitude: lng } = pos.coords;
+      // Always update raw coords (keeps ShelterButtons deep links fresh)
+      setLocation(prev => ({ ...prev, lat, lng, error: null }));
+
+      const last = lastResolvedRef.current;
+      if (!last || haversineMeters(last.lat, last.lng, lat, lng) >= DISTANCE_THRESHOLD_M) {
+        void resolveArea(lat, lng);
+      }
+    }
+
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      onPosition,
+      () => setLocation({ lat: null, lng: null, cityName: null, error: 'לא ניתן לקבל מיקום' }),
+      { enableHighAccuracy: false, timeout: 10_000 }
     );
+
+    // Re-resolve area when the app comes back to the foreground
+    function onVisibilityChange(): void {
+      if (!document.hidden && lastResolvedRef.current) {
+        void resolveArea(lastResolvedRef.current.lat, lastResolvedRef.current.lng);
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, []);
 
   return location;

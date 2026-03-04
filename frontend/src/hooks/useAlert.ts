@@ -21,23 +21,40 @@ export function useAlert(userArea: string | null) {
   const [isConnected, setIsConnected] = useState(true);
 
   useEffect(() => {
-    const es = new EventSource('/api/alert-stream');
+    let es: EventSource | null = null;
 
-    es.onmessage = (event: MessageEvent) => {
-      const data = JSON.parse(event.data as string) as AlertData;
-      if (data.active && !areaInAlert(userArea, data.cities)) {
-        setAlert({ active: false });
-      } else {
-        setAlert(data);
+    function connect() {
+      es?.close();
+      es = new EventSource('/api/alert-stream');
+
+      es.onmessage = (event: MessageEvent) => {
+        const data = JSON.parse(event.data as string) as AlertData;
+        if (data.active && !areaInAlert(userArea, data.cities)) {
+          setAlert({ active: false });
+        } else {
+          setAlert(data);
+        }
+        setIsConnected(true);
+      };
+
+      es.onerror = () => {
+        setIsConnected(false);
+      };
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible') {
+        connect();
       }
-      setIsConnected(true);
-    };
+    }
 
-    es.onerror = () => {
-      setIsConnected(false);
-    };
+    connect();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    return () => es.close();
+    return () => {
+      es?.close();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [userArea]);
 
   return { alert, isConnected };

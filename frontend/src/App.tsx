@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAlert } from './hooks/useAlert';
 import { useLocation } from './hooks/useLocation';
 import { usePushNotif } from './hooks/usePushNotif';
@@ -35,7 +35,14 @@ const btnStyle = (active: boolean): React.CSSProperties => ({
 export default function App() {
   const location = useLocation();
   const { alert, isConnected } = useAlert(location.cityName);
-  const { isSubscribed, isSupported, permission, subscribe } = usePushNotif();
+  const { isSubscribed, isSupported, permission, subscribe, updateArea } = usePushNotif();
+
+  // Silently sync push subscription area whenever the city changes
+  useEffect(() => {
+    if (isSubscribed && location.cityName !== null) {
+      void updateArea(location.cityName);
+    }
+  }, [location.cityName, isSubscribed, updateArea]);
 
   // Frontend-only mock (UI override, no backend)
   const [feActive, setFeActive] = useState(false);

@@ -65,5 +65,23 @@ export function usePushNotif() {
     }
   }
 
-  return { isSubscribed, isSupported, permission, subscribe };
+  // Silently updates the area stored on the backend for an existing subscription.
+  // Does NOT prompt for permission and does NOT create a new push subscription.
+  async function updateArea(area: string | null) {
+    if (!isSupported || !isSubscribed) return;
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const existing = await registration.pushManager.getSubscription();
+      if (!existing) return;
+      await fetch('/api/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...existing.toJSON(), area }),
+      });
+    } catch (err) {
+      console.error('Area update failed:', err);
+    }
+  }
+
+  return { isSubscribed, isSupported, permission, subscribe, updateArea };
 }
